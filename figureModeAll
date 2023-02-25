@@ -1,0 +1,155 @@
+wait(10)
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local camera = Workspace.CurrentCamera
+
+local background = Drawing.new("Square")
+background.Color = Color3.new(0, 0, 0)
+background.Filled = true
+background.Visible = true
+
+RunService.RenderStepped:Connect(function()
+    local v_size = camera.ViewportSize
+    background.Size = Vector2.new(v_size.X, v_size.Y)
+end)
+
+function sound_instance(sound)
+    local line = Drawing.new("Line")
+    local text = Drawing.new("Text")
+
+    local rs_c = RunService.RenderStepped:Connect(function()
+        local pos = Vector3.new()
+        local origin = camera.CFrame.Position
+        
+        local parented, _ = pcall(function()
+            pos = sound.Parent:GetPivot().Position
+        end)
+        
+        local v_size = camera.ViewportSize
+        local wtvp, visible = camera:WorldToViewportPoint(pos)
+
+        local magnitude = (origin - pos).Magnitude
+        local vol = (sound.PlaybackLoudness * sound.Volume)
+        local transparency = math.clamp(vol / 20, 0.1, 1)
+        local tsize = math.clamp(30 - magnitude / 3, 0, math.huge)
+        
+        line.Color = Color3.fromHSV(math.clamp(magnitude, 0, 1000) / 1000, 1, transparency)
+        line.From = Vector2.new(v_size.X / 2, v_size.Y / 2)
+        line.To = Vector2.new(wtvp.X, wtvp.Y)
+        line.ZIndex = 3
+        line.Visible = visible
+
+        text.Text = ("[Class: "..sound.Parent.ClassName.."] [Name: "..sound.Parent.Name.."] [Magnitude: " ..(math.floor(magnitude * 10) / 10).."]")
+        text.Color = Color3.fromHSV(math.clamp(magnitude, 0, 1000) / 1000, 1, transparency)
+        text.Outline = false
+        text.Center = true
+        text.Position = line.To
+        text.Size = tsize
+        text.Font = Drawing.Fonts.Monospace
+        text.ZIndex = 4
+        text.Visible = visible
+    end)
+    
+    sound.Destroying:Once(function()
+        rs_c:Disconnect()
+        line:Remove()
+        text:Remove()
+    end)
+end
+
+function part_instance(part)
+    local color = Color3.new(1, 1, 1)
+    
+    local current_drawings = {}
+    
+    local rs = game:GetService("RunService").RenderStepped:Connect(function()
+        local pos, onScreen = camera:WorldToViewportPoint(part.Position)
+        local mag = (part.Position - camera.CFrame.Position).Magnitude
+        
+        if onScreen and mag < 32 then
+            local d1 = current_drawings[1] or Drawing.new("Quad")
+            d1.Thickness = 2
+            d1.Color = color
+            d1.ZIndex = 2
+            d1.Visible = true
+            
+            local d2 = current_drawings[2] or Drawing.new("Quad")
+            d2.Thickness = 2
+            d2.Color = color
+            d2.ZIndex = 2
+            d2.Visible = true
+            
+            current_drawings[1] = d1
+            current_drawings[2] = d2
+            
+            local la = part.CFrame
+            
+            local n1a = la * CFrame.new(part.Size.X / 2, part.Size.Y / 2, part.Size.Z / 2)
+            local n2a = la * CFrame.new(-part.Size.X / 2, part.Size.Y / 2, part.Size.Z / 2)
+            local n3a = la * CFrame.new(part.Size.X / 2, -part.Size.Y / 2, part.Size.Z / 2)
+            local n4a = la * CFrame.new(-part.Size.X / 2, -part.Size.Y / 2, part.Size.Z / 2)
+            local n1b = la * CFrame.new(part.Size.X / 2, part.Size.Y / 2, -part.Size.Z / 2)
+            local n2b = la * CFrame.new(-part.Size.X / 2, part.Size.Y / 2, -part.Size.Z / 2)
+            local n3b = la * CFrame.new(part.Size.X / 2, -part.Size.Y / 2, -part.Size.Z / 2)
+            local n4b = la * CFrame.new(-part.Size.X / 2, -part.Size.Y / 2, -part.Size.Z / 2)
+
+            local w1a = camera:WorldToViewportPoint(n1a.Position)
+            local w2a = camera:WorldToViewportPoint(n2a.Position)
+            local w3a = camera:WorldToViewportPoint(n3a.Position)
+            local w4a = camera:WorldToViewportPoint(n4a.Position)
+            local w1b = camera:WorldToViewportPoint(n1b.Position)
+            local w2b = camera:WorldToViewportPoint(n2b.Position)
+            local w3b = camera:WorldToViewportPoint(n3b.Position)
+            local w4b = camera:WorldToViewportPoint(n4b.Position)
+            
+            
+            d1.PointA = Vector2.new(w1a.X, w1a.Y)
+            d1.PointB = Vector2.new(w2a.X, w2a.Y)
+            d1.PointC = Vector2.new(w4a.X, w4a.Y)
+            d1.PointD = Vector2.new(w3a.X, w3a.Y)
+            d2.PointA = Vector2.new(w1b.X, w1b.Y)
+            d2.PointB = Vector2.new(w2b.X, w2b.Y)
+            d2.PointC = Vector2.new(w4b.X, w4b.Y)
+            d2.PointD = Vector2.new(w3b.X, w3b.Y)
+        else
+            for _, d in pairs(current_drawings) do
+                d:Remove()
+            end
+            
+            table.clear(current_drawings)
+        end
+    end)
+    
+    part.Destroying:Once(function() 
+        rs:Disconnect()
+        
+        for _, d in pairs(current_drawings) do
+            d:Remove()
+        end
+        
+        table.clear(current_drawings)
+    end)
+end
+
+for _, object in pairs(Workspace:GetDescendants()) do
+    if object:IsA("Sound") then
+        sound_instance(object)
+    end
+    
+    if object:IsA("BasePart") then
+        part_instance(object)
+    end
+end
+
+Workspace.DescendantAdded:Connect(function(object)
+    if object:IsA("Sound") then
+        sound_instance(object)
+    end
+    
+    if object:IsA("BasePart") then
+        part_instance(object)
+    end
+end)
